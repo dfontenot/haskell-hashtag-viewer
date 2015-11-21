@@ -15,6 +15,7 @@ import qualified Data.Conduit.List as CL
 import qualified Data.ByteString.Char8 as S8
 import Web.Authenticate.OAuth
 import Network.HTTP.Conduit
+import Control.Monad.Trans.Resource (runResourceT)
 
 getOAuthTokens :: IO (OAuth, Credential)
 getOAuthTokens = do
@@ -30,7 +31,8 @@ getOAuthTokens = do
       in
    return (oauth, cred)
     where
-      readFile' = (S8.pack <$>) . readFile
+      strip = filter (\x -> not $ x `elem` [' ','\t','\r','\n'])
+      readFile' = (S8.pack <$>) . (liftM strip) . readFile
 
 getTwitterInfo :: IO TWInfo
 getTwitterInfo = do
@@ -40,9 +42,11 @@ getTwitterInfo = do
 main :: IO ()
 main = do
   twitterInfo <- getTwitterInfo
-  withManager $ \mgr -> do
-    src <- stream twitterInfo mgr $ statusesFilterByTrack "cats"
-    src $$+- CL.mapM_ (liftIO . printStatus)
+  manager <- newManager tlsManagerSettings
+  runResourceT $ do
+    src <- stream twitterInfo manager $ statusesFilterByTrack "cats"
+    --src <- stream twitterInfo manager userstream
+    src C.$$+- CL.mapM_ (liftIO . printStatus)
 
 printStatus :: StreamingAPI -> IO ()
 printStatus (SStatus s) = print "hi"
