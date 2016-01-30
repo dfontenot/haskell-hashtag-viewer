@@ -18,6 +18,3 @@ cabal.sandbox.config
 *~
 
 private/
-
-# binaries
-src/Viewer
