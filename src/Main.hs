@@ -1,9 +1,13 @@
 {-#LANGUAGE OverloadedStrings #-}
 
 module Main where
+import TwitterTypes
+
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.Text.IO as T
+import Data.Aeson
 import Data.Char (isSpace)
 import Web.Authenticate.OAuth
 import Network.HTTP.Client
@@ -43,4 +47,7 @@ main = do
       do
         signedRequest <- signOAuth oauthConsumer creds myRequest
         response <- getResponse signedRequest
-        BL.putStrLn $ response
+        let jsonTweets = (eitherDecode response) :: (Either String TwitterSearch) in
+          case jsonTweets of
+            Left err -> putStrLn err
+            Right search -> T.putStrLn $ text (head (statuses search))
