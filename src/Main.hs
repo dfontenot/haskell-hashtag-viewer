@@ -56,12 +56,26 @@ getLatestTweets = do
         return ((eitherDecode response) :: (Either String TT.TwitterSearch))
 
 statusToTweetFields :: TT.Status -> TweetFields
-statusToTweetFields status = (TweetFields (TT.id status) (TT.screen_name (TT.user status)) (TT.text status))
+statusToTweetFields status = (TweetFields (TT.id_str status) (TT.name (TT.user status)) (TT.screen_name (TT.user status)) (TT.text status))
 
-createTableIfNotExists :: IO ()
-createTableIfNotExists = DB.withConnection dbFile
+createTablesIfNotExists :: IO ()
+createTablesIfNotExists = DB.withConnection dbFile
   (\conn ->
-    DB.execute_ conn "CREATE TABLE IF NOT EXISTS tweets (id INTEGER PRIMARY KEY, tweet_id INT, author VARCHAR(50), text VARCHAR(140))")
+    DB.execute_ conn "CREATE TABLE IF NOT EXISTS tweets (tweet_id VARCHAR(100) PRIMARY KEY, user_name VARCHAR(50), screen_name VARCHAR(50), text VARCHAR(140))"
+    >> DB.execute_ conn "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY, tweet_id VARCHAR(100), image BLOB)")
+
+--getImagesDataFromStatus :: TT.Status -> IO [B.ByteString]
+--getImagesDataFromStatus status = _
+
+insertTweet :: TT.Status -> DB.Connection -> IO ()
+insertTweet status conn = do
+  case (TT.media . TT.entities) status of
+    Just media -> do
+      DB.execute conn "INSERT INTO tweets VALUES (?,?,?,?)" (statusToTweetFields status)
+      forM_ img_entities (\i -> DB.execute conn "INSERT INTO images (tweet_id, image) VALUES (?, ?)" (TT.id_str status, "blah" :: B.ByteString))
+        where
+          img_entities = filter (\m -> (TT.media_type m) == "photo") media
+    Nothing -> return ()
 
 writeTweetsToDB :: [TT.Status] -> IO ()
 writeTweetsToDB tweets =
@@ -69,12 +83,15 @@ writeTweetsToDB tweets =
   where
     executeStatements [] _ = return ()
     executeStatements (status:rst) conn = do
-      DB.execute conn "INSERT INTO tweets (tweet_id,author,text) values (?,?,?)" (statusToTweetFields status)
-      executeStatements rst conn
+      -- only insert unique tweets
+      res <- (DB.query conn "SELECT tweet_id FROM tweets WHERE tweet_id = ? LIMIT 1" (DB.Only (TT.id_str status))) :: IO [DB.Only T.Text]
+      case res of
+        [] -> executeStatements rst conn
+        _ -> (insertTweet status conn) >> executeStatements rst conn
 
 main :: IO ()
 main = do
-  createTableIfNotExists
+  createTablesIfNotExists
   tweetResult <- getLatestTweets
   case tweetResult of
     Left err -> putStrLn err
