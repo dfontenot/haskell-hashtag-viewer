@@ -64,17 +64,19 @@ createTablesIfNotExists = DB.withConnection dbFile
     DB.execute_ conn "CREATE TABLE IF NOT EXISTS tweets (tweet_id VARCHAR(100) PRIMARY KEY, user_name VARCHAR(50), screen_name VARCHAR(50), text VARCHAR(140))"
     >> DB.execute_ conn "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY, tweet_id VARCHAR(100), image BLOB)")
 
---getImagesDataFromStatus :: TT.Status -> IO [B.ByteString]
---getImagesDataFromStatus status = _
+getImagesDataFromMedia :: [TT.Media] -> IO [BL.ByteString]
+getImagesDataFromMedia media = mapM fetchHTTPSUrl img_entities
+  where
+    fetchHTTPSUrl url = (parseUrl (T.unpack url)) >>= (\req -> getResponse req)
+    img_entities = map (\m -> TT.media_url_https m) $ filter (\m -> (TT.media_type m) == "photo") media
 
 insertTweet :: TT.Status -> DB.Connection -> IO ()
 insertTweet status conn = do
   case (TT.media . TT.entities) status of
     Just media -> do
       DB.execute conn "INSERT INTO tweets VALUES (?,?,?,?)" (statusToTweetFields status)
-      forM_ img_entities (\i -> DB.execute conn "INSERT INTO images (tweet_id, image) VALUES (?, ?)" (TT.id_str status, "blah" :: B.ByteString))
-        where
-          img_entities = filter (\m -> (TT.media_type m) == "photo") media
+      images <- getImagesDataFromMedia media
+      mapM_ (\i -> DB.execute conn "INSERT INTO images (tweet_id, image) VALUES (?, ?)" (TT.id_str status, i)) images
     Nothing -> return ()
 
 writeTweetsToDB :: [TT.Status] -> IO ()
