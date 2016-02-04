@@ -88,8 +88,8 @@ writeTweetsToDB tweets =
       -- only insert unique tweets
       res <- (DB.query conn "SELECT tweet_id FROM tweets WHERE tweet_id = ? LIMIT 1" (DB.Only (TT.id_str status))) :: IO [DB.Only T.Text]
       case res of
-        [] -> executeStatements rst conn
-        _ -> (insertTweet status conn) >> executeStatements rst conn
+        [] -> (insertTweet status conn) >> executeStatements rst conn
+        _ -> executeStatements rst conn
 
 main :: IO ()
 main = do
