@@ -1,6 +1,6 @@
 {-#LANGUAGE OverloadedStrings #-}
 
-module Main where
+module TwitterPoller where
 import qualified TwitterTypes as TT
 import SqlTypes
 
