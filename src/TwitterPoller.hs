@@ -7,6 +7,7 @@ import SqlTypes
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Base64 as BB
 import qualified Data.Text.IO as TIO
 import qualified Data.Text as T
 import qualified Database.SQLite.Simple as DB
@@ -19,6 +20,10 @@ import Control.Monad
 
 dbFile :: String
 dbFile = "tweets.db"
+
+-- source: http://stackoverflow.com/a/8552723/854854
+blToStrict :: BL.ByteString -> B.ByteString
+blToStrict = B.concat . BL.toChunks
 
 -- https://dev.twitter.com/rest/public/search
 searchQuery :: String
@@ -62,12 +67,12 @@ createTablesIfNotExists :: IO ()
 createTablesIfNotExists = DB.withConnection dbFile
   (\conn ->
     DB.execute_ conn "CREATE TABLE IF NOT EXISTS tweets (tweet_id VARCHAR(100) PRIMARY KEY, user_name VARCHAR(50), screen_name VARCHAR(50), text VARCHAR(140))"
-    >> DB.execute_ conn "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY, tweet_id VARCHAR(100), image BLOB)")
+    >> DB.execute_ conn "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY, tweet_id VARCHAR(100), image TEXT)")
 
-getImagesDataFromMedia :: [TT.Media] -> IO [BL.ByteString]
+getImagesDataFromMedia :: [TT.Media] -> IO [B.ByteString]
 getImagesDataFromMedia media = mapM fetchHTTPSUrl img_entities
   where
-    fetchHTTPSUrl url = (parseUrl (T.unpack url)) >>= (\req -> getResponse req)
+    fetchHTTPSUrl url = (parseUrl (T.unpack url)) >>= (\req -> getResponse req) >>= (\resp -> return $ (BB.encode . blToStrict) resp)
     img_entities = map (\m -> TT.media_url_https m) $ filter (\m -> (TT.media_type m) == "photo") media
 
 insertTweet :: TT.Status -> DB.Connection -> IO ()
