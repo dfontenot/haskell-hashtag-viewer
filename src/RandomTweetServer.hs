@@ -5,6 +5,7 @@ module RandomTweetServer where
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as E
 import qualified Database.SQLite.Simple as DB
 import System.IO.Error
 import GHC.Generics
@@ -37,10 +38,10 @@ type TweetRow = (T.Text, T.Text, T.Text, T.Text)
 
 getImage :: DB.Connection -> TweetRow -> IO RandomTweetResponse
 getImage conn (tweet_id,screen_name,user_name,tweet_) = do
-  res <- DB.query conn "SELECT image FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [DB.Only T.Text]
+  res <- DB.query conn "SELECT image FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [DB.Only B.ByteString]
   case res of
     [] -> raiseUserIOError "No image associated with tweet_id"
-    ((DB.Only image):[]) -> return $ RandomTweetResponse screen_name user_name tweet_ image
+    ((DB.Only image):[]) -> return $ RandomTweetResponse screen_name user_name tweet_ (E.decodeUtf8 image)
     _ -> raiseUserIOError "Something went wrong with the query"
 
 getRandomTweetText :: DB.Connection -> IO TweetRow
@@ -64,7 +65,7 @@ respondOk :: RandomTweetResponse -> Response BL.ByteString
 respondOk tweetResp = Response (2,0,0) "yay" headers (encode tweetResp)
 
 respondError :: String -> Response BL.ByteString
-respondError msg = Response (5,0,0) "sad" headers jsonMsg
+respondError msg = Response (5,0,2) "sad" headers jsonMsg
   where
     jsonMsg = encode $ object [ "error_message" .= msg ]
 
