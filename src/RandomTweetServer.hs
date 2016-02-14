@@ -27,6 +27,7 @@ data RandomTweetResponse =
   RandomTweetResponse { screenName :: T.Text
                       , userName :: T.Text
                       , tweet :: T.Text
+                      , img_ext :: T.Text
                       , image :: T.Text } deriving (Show, Generic)
 instance ToJSON RandomTweetResponse
 
@@ -44,14 +45,15 @@ doRespond Nothing = return $ Response (5,0,0) "Internal Server Error" headers js
 getRandomTweetResponse :: DB.Connection -> DBMonad RandomTweetResponse
 getRandomTweetResponse conn = do
   (tweet_id,screen_name,user_name,tweet_) <- getRandomTweetText conn
-  base64Image <- getImage conn tweet_id
-  return $ RandomTweetResponse screen_name user_name tweet_ base64Image
+  (base64Image, ext) <- getImage conn tweet_id
+  return $ RandomTweetResponse screen_name user_name tweet_ ext base64Image
 
-getImage :: DB.Connection -> T.Text -> DBMonad T.Text
+getImage :: DB.Connection -> T.Text -> DBMonad (T.Text, T.Text)
 getImage conn tweet_id = MaybeT $ do
-  res <- DB.query conn "SELECT image FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [DB.Only B.ByteString]
+  -- TEXT column types must be fetched as a ByteString
+  res <- DB.query conn "SELECT image, img_ext FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [(B.ByteString, T.Text)]
   return $ case res of
-    [(DB.Only image)] -> Just $ E.decodeUtf8 image
+    [(image, ext)] -> Just $ (E.decodeUtf8 image, ext)
     _ -> Nothing
 
 getRandomTweetText :: DB.Connection -> DBMonad TweetRow

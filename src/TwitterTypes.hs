@@ -2,7 +2,7 @@
 
 module TwitterTypes where
 import Data.Aeson
-import Data.Text
+import Data.Text hiding (map, filter)
 import GHC.Generics
 import Control.Monad
 
@@ -64,3 +64,6 @@ data TwitterSearch =
 
 instance FromJSON TwitterSearch
 instance ToJSON TwitterSearch
+
+getHTTPSImagesUrls :: [Media] -> [Text]
+getHTTPSImagesUrls media = map (\m -> media_url_https m) $ filter (\m -> (media_type m) == "photo") media
