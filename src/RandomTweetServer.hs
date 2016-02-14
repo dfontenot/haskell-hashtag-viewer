@@ -7,24 +7,21 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Database.SQLite.Simple as DB
-import System.IO.Error
 import GHC.Generics
 import Data.Aeson
 import Network.HTTP.Server
 import Network.URL
 import Control.Monad
+import Control.Monad.Trans.Maybe
 
 dbFile :: String
 dbFile = "tweets.db"
 
 headers :: [Header]
 headers = [Header HdrPragma "no-cache"
-          , Header HdrContentType "application/json"
+          , Header HdrContentType "application/json; charset=utf-8"
           , Header HdrConnection "close"
           , Header HdrServer "RandomTweetServer"]
-
-raiseUserIOError :: String -> IO a
-raiseUserIOError str = (ioError . userError) str
 
 data RandomTweetResponse =
   RandomTweetResponse { screenName :: T.Text
@@ -36,51 +33,40 @@ instance ToJSON RandomTweetResponse
 -- tweet_id, screenName, userName, tweet
 type TweetRow = (T.Text, T.Text, T.Text, T.Text)
 
-getImage :: DB.Connection -> TweetRow -> IO RandomTweetResponse
-getImage conn (tweet_id,screen_name,user_name,tweet_) = do
-  res <- DB.query conn "SELECT image FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [DB.Only B.ByteString]
-  case res of
-    [] -> raiseUserIOError "No image associated with tweet_id"
-    ((DB.Only image):[]) -> return $ RandomTweetResponse screen_name user_name tweet_ (E.decodeUtf8 image)
-    _ -> raiseUserIOError "Something went wrong with the query"
+type DBMonad = MaybeT IO
 
-getRandomTweetText :: DB.Connection -> IO TweetRow
-getRandomTweetText conn = do
+doRespond :: Maybe RandomTweetResponse -> IO (Response BL.ByteString)
+doRespond (Just tweetResp) = return $ Response (2,0,0) "Ok" headers (encode tweetResp)
+doRespond Nothing = return $ Response (5,0,0) "Internal Server Error" headers jsonMsg
+  where
+    jsonMsg = encode $ object [ "error_message" .= ("Internal Server Error" :: T.Text) ]
+
+getRandomTweetResponse :: DB.Connection -> DBMonad RandomTweetResponse
+getRandomTweetResponse conn = do
+  (tweet_id,screen_name,user_name,tweet_) <- getRandomTweetText conn
+  base64Image <- getImage conn tweet_id
+  return $ RandomTweetResponse screen_name user_name tweet_ base64Image
+
+getImage :: DB.Connection -> T.Text -> DBMonad T.Text
+getImage conn tweet_id = MaybeT $ do
+  res <- DB.query conn "SELECT image FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [DB.Only B.ByteString]
+  return $ case res of
+    [(DB.Only image)] -> Just $ E.decodeUtf8 image
+    _ -> Nothing
+
+getRandomTweetText :: DB.Connection -> DBMonad TweetRow
+getRandomTweetText conn = MaybeT $ do
   res <-
     DB.query_ conn "SELECT tweet_id, user_name, screen_name, text FROM tweets ORDER BY RANDOM() LIMIT 1" :: IO [TweetRow]
-  case res of
-    [] -> raiseUserIOError "No tweets stored in database"
-    ((tweet_id, user_name, screen_name, tweet_):[]) -> return (tweet_id, screen_name, user_name, tweet_)
-    _ -> raiseUserIOError "Something went wrong with the query"
-
-getRandomTweet :: DB.Connection -> IO (Either String RandomTweetResponse)
-getRandomTweet conn = catchIOError (chainedDBCalls conn) (\err -> return $ Left "Everything failed")
-  where
-    chainedDBCalls conn = do
-      tr <- getRandomTweetText conn
-      resp <- getImage conn tr
-      return $ Right resp
-
-respondOk :: RandomTweetResponse -> Response BL.ByteString
-respondOk tweetResp = Response (2,0,0) "yay" headers (encode tweetResp)
-
-respondError :: String -> Response BL.ByteString
-respondError msg = Response (5,0,2) "sad" headers jsonMsg
-  where
-    jsonMsg = encode $ object [ "error_message" .= msg ]
-
-doRespond :: DB.Connection -> IO (Response BL.ByteString)
-doRespond conn = do
-  randomTweetRes <- getRandomTweet conn
-  return $ case randomTweetRes of
-    Left msg -> respondError msg
-    Right result -> respondOk result
+  return $ case res of
+    [vals] -> Just vals
+    _ -> Nothing
 
 handler :: URL -> Request BL.ByteString -> IO (Response BL.ByteString)
 handler url req = DB.withConnection dbFile handleWithConnection
   where
     handleWithConnection conn = case rqMethod req of
-      GET -> doRespond conn
+      GET -> (runMaybeT (getRandomTweetResponse conn) ) >>= doRespond
       _ -> return $ err_response NotImplemented
 
 main :: IO ()

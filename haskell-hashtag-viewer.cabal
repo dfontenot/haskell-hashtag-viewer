@@ -28,5 +28,5 @@ executable RandomTweetServer
   hs-source-dirs:      src
   ghc-options:         -O2 -threaded -with-rtsopts=-N -main-is RandomTweetServer
   main-is:             RandomTweetServer.hs
-  build-depends:       base >= 4.8 && <4.9, bytestring >=0.10 && <0.11, text >=1.2 && <=1.2.2.0, aeson >=0.9.0.0 && <= 0.10.0.0, sqlite-simple >=0.4.8.0 && <= 0.4.9.0, http-server==1.0.6.*, url==2.1.*
+  build-depends:       base >= 4.8 && <4.9, bytestring >=0.10 && <0.11, text >=1.2 && <=1.2.2.0, aeson >=0.9.0.0 && <= 0.10.0.0, sqlite-simple >=0.4.8.0 && <= 0.4.9.0, http-server==1.0.6.*, url==2.1.*, transformers >= 0.4.2 && < 0.5.2
   default-language:    Haskell2010
