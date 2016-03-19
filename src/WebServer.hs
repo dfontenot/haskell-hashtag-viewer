@@ -5,9 +5,12 @@ module WebServer where
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as C8L
+import qualified Data.Map.Strict as Map
 import qualified System.FilePath as FP
 import Data.String.Conversions
+import Data.Word
 import Network.HTTP.Server
+import Network.HTTP.Server.Logger
 import Network.URL
 import Network.Mime
 import Control.Monad
@@ -15,6 +18,8 @@ import Control.Monad.Reader
 import Control.Monad.IO.Class
 import System.Directory
 import System.Environment
+
+import SimpleArgvParser
 
 data ServerSettings = ServerSettings
                       { webRoot :: String
@@ -63,11 +68,23 @@ handler url req = case rqMethod req of
   GET -> doRespond url
   _ -> return $ err_response NotImplemented
 
+makeServerConfig :: Map.Map String String -> Config
+makeServerConfig argMap = Config stdLogger "localhost" port
+  where
+    port = case Map.lookup "port" argMap of
+      Just port -> fromIntegral (read port :: Integer)
+      Nothing -> 8000
+
 main :: IO ()
 main = do
   args <- getArgs
-  if length args < 1
-    then putStrLn "Specify a web root"
-    else server $ handler' (head args)
+
+  -- TODO: could be made cleaner
+  case pairArguments args of
+    Just argMap -> case Map.lookup "root" argMap of
+      Just web_root -> serverWith (makeServerConfig argMap) $ handler' web_root
+      Nothing -> putStrLn usage
+    Nothing -> putStrLn usage
   where
     handler' webRoot _ url req = runReaderT (handler url req) (ServerSettings webRoot)
+    usage = "./WebServer <web_root> [<port>]"
