@@ -6,6 +6,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as C8L
 import qualified System.FilePath as FP
+import Data.String.Conversions
 import Network.HTTP.Server
 import Network.URL
 import Network.Mime
@@ -28,14 +29,18 @@ type ServerMonad = ReaderT ServerSettings IO
 
 headers :: [Header]
 headers = [Header HdrPragma "no-cache"
-          , Header HdrContentType "text/html; charset=utf-8"
           , Header HdrConnection "close"
           , Header HdrServer "HashtagViewerWebServer"]
 
 respondForFile :: FileResponse -> IO (Response BL.ByteString)
-respondForFile (FileOK path) = (BL.readFile path) >>= (\contents -> return (Response (2,0,0) "Ok" headers contents))
 respondForFile (PermissionDenied path) = return $ Response (4,0,3) "Permission denied" headers $ (C8L.pack . show) path
 respondForFile (FileNotFound path) = return $ Response (4,0,4) "File not found" headers $ (C8L.pack . show) path
+respondForFile (FileOK path) = do
+  contents <- BL.readFile path
+  return $ Response (2,0,0) "Ok" modifiedHeaders contents
+    where
+      mimeTypeHeader = Header HdrContentType $ cs $ defaultMimeLookup (cs path)
+      modifiedHeaders = mimeTypeHeader:headers
 
 getResponseForFile :: String -> IO FileResponse
 getResponseForFile filePath = do
