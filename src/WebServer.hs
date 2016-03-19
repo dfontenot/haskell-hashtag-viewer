@@ -5,27 +5,32 @@ module WebServer where
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as C8L
+import qualified System.FilePath as FP
 import Network.HTTP.Server
 import Network.URL
+import Network.Mime
 import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.IO.Class
 import System.Directory
+import System.Environment
 
-webRoot :: String
-webRoot = "/Users/david/workspace"
+data ServerSettings = ServerSettings
+                      { webRoot :: String
+                      }
 
 data FileResponse =
   PermissionDenied String
   | FileNotFound String
   | FileOK String
 
+type ServerMonad = ReaderT ServerSettings IO
+
 headers :: [Header]
 headers = [Header HdrPragma "no-cache"
           , Header HdrContentType "text/html; charset=utf-8"
           , Header HdrConnection "close"
           , Header HdrServer "HashtagViewerWebServer"]
-
-dumpUrl :: URL -> IO (Response BL.ByteString)
-dumpUrl url = return $ Response (2,0,0) "Ok" headers $ (C8L.pack . show) url
 
 respondForFile :: FileResponse -> IO (Response BL.ByteString)
 respondForFile (FileOK path) = (BL.readFile path) >>= (\contents -> return (Response (2,0,0) "Ok" headers contents))
@@ -42,16 +47,22 @@ getResponseForFile filePath = do
                         else return $ PermissionDenied filePath)
      else return $ FileNotFound filePath
 
-doRespond :: URL -> IO (Response BL.ByteString)
-doRespond url = (getResponseForFile filePath) >>= respondForFile
-  where filePath = webRoot ++ (url_path url)
+doRespond :: URL -> ServerMonad (Response BL.ByteString)
+doRespond url = do
+  root <- asks webRoot
+  file <- liftIO $ getResponseForFile (root ++ (url_path url))
+  liftIO $ respondForFile file
 
-handler :: URL -> Request BL.ByteString -> IO (Response BL.ByteString)
+handler :: URL -> Request BL.ByteString -> ServerMonad (Response BL.ByteString)
 handler url req = case rqMethod req of
   GET -> doRespond url
   _ -> return $ err_response NotImplemented
 
 main :: IO ()
-main = server handler'
+main = do
+  args <- getArgs
+  if length args < 1
+    then putStrLn "Specify a web root"
+    else server $ handler' (head args)
   where
-    handler' _ url req = handler url req
+    handler' webRoot _ url req = runReaderT (handler url req) (ServerSettings webRoot)
