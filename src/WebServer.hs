@@ -4,7 +4,6 @@ module WebServer where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Lazy.Char8 as C8L
 import qualified Data.Map.Strict as Map
 import qualified System.FilePath as FP
 import Data.String.Conversions
@@ -38,8 +37,8 @@ headers = [Header HdrPragma "no-cache"
           , Header HdrServer "HashtagViewerWebServer"]
 
 respondForFile :: FileResponse -> IO (Response BL.ByteString)
-respondForFile (PermissionDenied path) = return $ Response (4,0,3) "Permission denied" headers $ (C8L.pack . show) path
-respondForFile (FileNotFound path) = return $ Response (4,0,4) "File not found" headers $ (C8L.pack . show) path
+respondForFile (PermissionDenied path) = return $ Response (4,0,3) "Permission denied" headers (cs path)
+respondForFile (FileNotFound path) = return $ Response (4,0,4) "File not found" headers (cs path)
 respondForFile (FileOK path) = do
   contents <- BL.readFile path
   return $ Response (2,0,0) "Ok" modifiedHeaders contents
@@ -73,7 +72,7 @@ makeServerConfig argMap = Config stdLogger "localhost" port
   where
     port = case Map.lookup "port" argMap of
       Just port -> fromIntegral (read port :: Integer)
-      Nothing -> 8000
+      Nothing -> 8001
 
 main :: IO ()
 main = do

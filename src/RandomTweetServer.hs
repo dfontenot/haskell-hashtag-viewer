@@ -7,10 +7,13 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Database.SQLite.Simple as DB
+import qualified Data.List as L
 import GHC.Generics
 import Data.Aeson
 import Network.HTTP.Server
+import Network.HTTP.Server.Logger
 import Network.URL
+import Network.URI
 import Control.Monad
 import Control.Monad.Trans.Maybe
 
@@ -19,9 +22,16 @@ dbFile = "tweets.db"
 
 headers :: [Header]
 headers = [Header HdrPragma "no-cache"
-          , Header HdrContentType "application/json; charset=utf-8"
           , Header HdrConnection "close"
           , Header HdrServer "RandomTweetServer"]
+
+jsonHeaders :: [Header]
+jsonHeaders = (mkHeader HdrContentType "application/json; charset=utf-8"):headers
+
+allowGetForOrigin :: [Header] -> String -> [Header]
+allowGetForOrigin headers origin = (Header (HdrCustom "Access-Control-Allow-Origin") origin)
+  :(Header (HdrCustom "Access-Control-Allow-Methods") "GET")
+  :headers
 
 data RandomTweetResponse =
   RandomTweetResponse { screenName :: T.Text
@@ -36,11 +46,14 @@ type TweetRow = (T.Text, T.Text, T.Text, T.Text)
 
 type DBMonad = MaybeT IO
 
-doRespond :: Maybe RandomTweetResponse -> IO (Response BL.ByteString)
-doRespond (Just tweetResp) = return $ Response (2,0,0) "Ok" headers (encode tweetResp)
-doRespond Nothing = return $ Response (5,0,0) "Internal Server Error" headers jsonMsg
+-- TODO: move string arg to reader
+doRespond :: String -> Maybe RandomTweetResponse -> IO (Response BL.ByteString)
+doRespond origin resp = return (case resp of
+                                   Just tweetResp -> Response (2,0,0) "Ok" myHeaders (encode tweetResp)
+                                   Nothing -> let jsonMsg = encode $ object [ "error_message" .= ("Internal Server Error" :: T.Text) ] in
+                                     Response (5,0,0) "Internal Server Error" myHeaders jsonMsg)
   where
-    jsonMsg = encode $ object [ "error_message" .= ("Internal Server Error" :: T.Text) ]
+    myHeaders = allowGetForOrigin jsonHeaders origin
 
 getRandomTweetResponse :: DB.Connection -> DBMonad RandomTweetResponse
 getRandomTweetResponse conn = do
@@ -64,14 +77,33 @@ getRandomTweetText conn = MaybeT $ do
     [vals] -> Just vals
     _ -> Nothing
 
-handler :: URL -> Request BL.ByteString -> IO (Response BL.ByteString)
-handler url req = DB.withConnection dbFile handleWithConnection
+-- TODO: switch args to match other functions
+handleWithConnection :: String -> DB.Connection -> IO (Response BL.ByteString)
+handleWithConnection origin conn = (runMaybeT (getRandomTweetResponse conn) ) >>= doRespond origin
+
+-- TODO: move to separate lib
+originAcceptable :: String -> Bool
+originAcceptable origin = case getUriRegName of
+  Just name -> name == "localhost"
+  Nothing -> False
   where
-    handleWithConnection conn = case rqMethod req of
-      GET -> (runMaybeT (getRandomTweetResponse conn) ) >>= doRespond
-      _ -> return $ err_response NotImplemented
+    getUriRegName = fmap uriRegName $ (parseURI origin) >>= uriAuthority
+
+getOriginIfSetAndAllowed :: [Header] -> Maybe String
+getOriginIfSetAndAllowed headers = fmap hdrValue foundHeader
+  where
+    foundHeader = L.find (\header -> (hdrName header) == (HdrCustom "Origin") && originAcceptable (hdrValue header)) headers
+
+-- TODO: pass in origin via reader
+handler :: URL -> Request BL.ByteString -> IO (Response BL.ByteString)
+handler url req = case rqMethod req of
+  GET -> case getOriginIfSetAndAllowed (rqHeaders req) of
+    Just origin -> DB.withConnection dbFile $ handleWithConnection origin
+    Nothing -> return $ Response (4,0,3) "Unacceptable origin" headers ""
+  _ -> return $ err_response NotImplemented
 
 main :: IO ()
-main = server handler'
+main = serverWith serverConfig handler'
   where
     handler' _ url req = handler url req
+    serverConfig = Config stdLogger "localhost" 8000
