@@ -10,12 +10,15 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Base64 as BB
 import qualified Data.Text.IO as TIO
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as E
+import qualified Data.Map as Map
 import qualified Database.SQLite.Simple as DB
 import Data.Aeson
 import Data.Char (isSpace)
 import Web.Authenticate.OAuth
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.Mime
 import Control.Monad
 
 dbFile :: String
@@ -67,7 +70,7 @@ createTablesIfNotExists :: IO ()
 createTablesIfNotExists = DB.withConnection dbFile
   (\conn ->
     DB.execute_ conn "CREATE TABLE IF NOT EXISTS tweets (tweet_id VARCHAR(100) PRIMARY KEY, user_name VARCHAR(50), screen_name VARCHAR(50), text VARCHAR(140))"
-    >> DB.execute_ conn "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY, tweet_id VARCHAR(100), img_ext VARCHAR(4), image TEXT)")
+    >> DB.execute_ conn "CREATE TABLE IF NOT EXISTS images (id INTEGER PRIMARY KEY, tweet_id VARCHAR(100), mime_type VARCHAR(4), image TEXT)")
 
 getImagesDataFromMedia :: [TT.Media] -> IO [(T.Text, B.ByteString)]
 getImagesDataFromMedia media = mapM fetchHTTPSUrl (TT.getHTTPSImagesUrls media)
@@ -78,15 +81,25 @@ getImagesDataFromMedia media = mapM fetchHTTPSUrl (TT.getHTTPSImagesUrls media)
       let encoded = (BB.encode . blToStrict) resp in
         return (url, encoded)
 
+-- TODO: reader-ify DB connection
 insertTweet :: TT.Status -> DB.Connection -> IO ()
 insertTweet status conn = do
   case (TT.media . TT.entities) status of
     Just media -> do
       DB.execute conn "INSERT INTO tweets VALUES (?,?,?,?)" (statusToTweetFields status)
       images <- getImagesDataFromMedia media
-      let ext = T.takeWhileEnd (/='.') in
-        mapM_ (\(url,img) -> DB.execute conn "INSERT INTO images (tweet_id, img_ext, image) VALUES (?,?,?)" (TT.id_str status, ext url, img)) images
+      mapM_ (\(url,img) -> insertImageForTweet conn (TT.id_str status) (getMimeTypeFromUrl url) img) images
     Nothing -> return ()
+
+insertImageForTweet :: DB.Connection -> T.Text -> Maybe T.Text -> B.ByteString -> IO ()
+insertImageForTweet _ _ Nothing _ = return ()
+insertImageForTweet conn id (Just mimeType) img =
+  DB.execute conn "INSERT INTO images (tweet_id, mime_type, image) VALUES (?,?,?)" (id, mimeType, img)
+
+getMimeTypeFromUrl :: T.Text -> Maybe T.Text
+getMimeTypeFromUrl url = fmap E.decodeUtf8 $ Map.lookup ext defaultMimeMap
+  where
+    ext = T.takeWhileEnd(/= '.') url
 
 writeTweetsToDB :: [TT.Status] -> IO ()
 writeTweetsToDB tweets =
