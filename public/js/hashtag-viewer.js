@@ -1,12 +1,27 @@
 var displayTimeMs = 2000; // how long to show each image
 var curData = null;
 
+var fadeIn = {
+  transition: 'opacity ' + (displayTimeMs / 1000) + 's linear'
+};
+
 var renderImage = function(data) {
-  $('body').html("<img src='data:" + data.mimeType + ";base64," + data.image + "' />");
+  $('#image-message').addClass('hidden');
+
+  var newImage = $('<img/>').addClass('image-response image-initial-hidden')
+    .attr('src', 'data:' + data.mimeType + ";base64," + data.image);
+  newImage.css(fadeIn);
+
+  $('#container').append(newImage);
+  newImage.addClass('image-visible');
+
+  if ($('#container').children().length > 2) {
+    $('#container').find(':first-child').remove();
+  }
 };
 
 var renderNoImagesYet = function() {
-  $('body').html("<p>No images yet</p>");
+  $('#image-message').addClass('visible');
 };
 
 var showImageAndGetNext = function() {
@@ -27,7 +42,7 @@ var showImageAndGetNext = function() {
       curData = data;
     },
     error: function() {
-      console.log("Issue loading the next image");
+      console.error("Issue loading the next image");
     }
   });
 

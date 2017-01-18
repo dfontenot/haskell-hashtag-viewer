@@ -1,0 +1,31 @@
+#container {
+  position: relative;
+
+  /* TODO: use full screen, testing with 500x500 for now */
+  width: 500px;
+  height: 500px;
+}
+
+.image-response {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  width: 100%;
+  height: 100%;
+}
+
+.image-initial-hidden {
+  opacity: 0;
+}
+
+.image-visible {
+  opacity: 1;
+}
+
+.visible {
+  visibility: visible;
+}
+
+.hidden {
+  visibility: hidden;
+}
