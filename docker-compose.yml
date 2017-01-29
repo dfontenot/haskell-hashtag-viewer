@@ -1,0 +1,46 @@
+# https://docs.docker.com/compose/compose-file/
+version: '2'
+
+services:
+  web-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.web_server
+    container_name: hashtag-viewer-web-server
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    ports:
+      - "8001:8001"
+    depends_on:
+      - random-tweet-server
+      - twitter-poller
+  random-tweet-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.random_tweet_server
+    container_name: hashtag-viewer-tweet-server
+    volumes:
+      - ./tweets.db:./tweets.db
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    ports:
+      - "8000:8000"
+  twitter-poller:
+    build:
+      context: .
+      dockerfile: Dockerfile.twitter_poller
+    container_name: hashtag-viewer-twitter-poller
+    volumes:
+      - ./tweets.db:./tweets.db
+      - ./private:./private:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

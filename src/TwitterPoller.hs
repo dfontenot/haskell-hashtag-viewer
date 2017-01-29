@@ -20,6 +20,7 @@ import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Network.Mime
 import Control.Monad
+import Control.Concurrent
 
 dbFile :: String
 dbFile = "tweets.db"
@@ -31,6 +32,9 @@ blToStrict = B.concat . BL.toChunks
 -- https://dev.twitter.com/rest/public/search
 searchQuery :: String
 searchQuery = "https://api.twitter.com/1.1/search/tweets.json?q=%23cats"
+
+pollingPeriodUSec :: Int
+pollingPeriodUSec = 5 * 10^6
 
 myOAuth :: B.ByteString -> B.ByteString -> OAuth
 myOAuth consumerKey consumerSecret =
@@ -113,10 +117,17 @@ writeTweetsToDB tweets =
         [] -> (insertTweet status conn) >> executeStatements rst conn
         _ -> executeStatements rst conn
 
+pollTweets :: IO ()
+pollTweets = do
+  latestTweets <- getLatestTweets
+  case latestTweets of
+    Left err -> putStrLn err
+    Right tweets -> writeTweetsToDB $ TT.statuses tweets
+  threadDelay pollingPeriodUSec
+
 main :: IO ()
 main = do
   createTablesIfNotExists
-  tweetResult <- getLatestTweets
-  case tweetResult of
-    Left err -> putStrLn err
-    Right tweets -> writeTweetsToDB $ TT.statuses tweets
+  loop
+  where
+    loop = pollTweets >> loop

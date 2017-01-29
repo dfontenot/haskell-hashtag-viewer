@@ -1,0 +1,17 @@
+FROM haskell:8.0
+
+RUN cabal update && mkdir /opt/app
+
+WORKDIR /opt/app
+
+ADD LICENSE LICENSE
+ADD haskell-hashtag-viewer.cabal .
+
+RUN cabal install --only-dependencies -j$(nproc)
+
+ADD src src
+ADD public public
+RUN cabal build WebServer -j$(nproc)
+
+CMD ["dist/build/WebServer/WebServer --root public/ --port 8001"]
+
