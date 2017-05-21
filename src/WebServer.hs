@@ -52,24 +52,24 @@ respondForFile (FileOK path) = do
       mimeTypeHeader = Header HdrContentType $ cs $ defaultMimeLookup (cs path)
       modifiedHeaders = mimeTypeHeader:headers
 
--- TODO: bring into server monad once redirects are working correctly
-getResponseForFile :: String -> String -> IO FileResponse
-getResponseForFile _ path | path == "" = return RedirectToIndex
-getResponseForFile webRoot path = do
-  exists <- doesFileExist filePath
-  if exists
-     then (getPermissions filePath) >>=
-          (\perms -> if readable perms
-                        then return $ FileOK filePath
-                        else return $ PermissionDenied filePath)
-     else return $ FileNotFound filePath
-   where
-     filePath = webRoot ++ path
+getResponseForFile :: String -> ServerMonad FileResponse
+getResponseForFile urlPath = do
+  root <- asks webRoot
+  let filePath = root ++ urlPath in
+      if urlPath == "" then return RedirectToIndex else getFileResponse filePath
+  where
+    getFileResponse filePath = liftIO $ do
+      exists <- doesFileExist filePath
+      if exists
+         then (getPermissions filePath) >>=
+              (\perms -> if readable perms
+                            then return $ FileOK filePath
+                            else return $ PermissionDenied filePath)
+         else return $ FileNotFound filePath
 
 doRespond :: URL -> ServerMonad (Response BL.ByteString)
 doRespond url = do
-  root <- asks webRoot
-  file <- liftIO $ getResponseForFile root (url_path url)
+  file <- getResponseForFile $ url_path url
   liftIO $ respondForFile file
 
 handler :: URL -> Request BL.ByteString -> ServerMonad (Response BL.ByteString)
