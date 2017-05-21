@@ -89,7 +89,7 @@ getImagesDataFromMedia media = mapM fetchHTTPSUrl (TT.getHTTPSImagesUrls media)
 insertTweet :: TT.Status -> DB.Connection -> IO ()
 insertTweet status conn = do
   case (TT.media . TT.entities) status of
-    Just media -> do
+    Just media -> DB.withTransaction conn $ do
       DB.execute conn "INSERT INTO tweets VALUES (?,?,?,?)" (statusToTweetFields status)
       images <- getImagesDataFromMedia media
       mapM_ (\(url,img) -> insertImageForTweet conn (TT.id_str status) (getMimeTypeFromUrl url) img) images
