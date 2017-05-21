@@ -67,10 +67,12 @@ getRandomTweetResponse conn = do
   (base64Image, mimeType) <- getImage conn tweet_id
   return $ RandomTweetResponse screen_name user_name tweet_ mimeType base64Image
 
+-- TODO: handle multiple images per tweet?
+-- currently just selects one at random
 getImage :: DB.Connection -> T.Text -> DBMonad (T.Text, T.Text)
 getImage conn tweet_id = MaybeT $ do
   -- TEXT column types must be fetched as a ByteString
-  res <- DB.query conn "SELECT image, mime_type FROM images WHERE tweet_id = ?" (DB.Only tweet_id) :: IO [(B.ByteString, T.Text)]
+  res <- DB.query conn "SELECT image, mime_type FROM images WHERE tweet_id = ? ORDER BY RANDOM() LIMIT 1" (DB.Only tweet_id) :: IO [(B.ByteString, T.Text)]
   return $ case res of
     [(image, mime_type)] -> Just $ (E.decodeUtf8 image, mime_type)
     _ -> Nothing
