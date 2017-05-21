@@ -1,4 +1,4 @@
-module SimpleArgvParser where
+module SimpleArgvParser (pairArguments) where
 
 import Prelude hiding (map)
 import qualified Data.Map.Strict as Map

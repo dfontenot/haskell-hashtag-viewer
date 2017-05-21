@@ -4,12 +4,14 @@ module RandomTweetServer where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
 import qualified Database.SQLite.Simple as DB
 import qualified Data.List as L
 import GHC.Generics
 import Data.Aeson
+import Data.Maybe
 import Network.HTTP.Server
 import Network.HTTP.Server.Logger
 import Network.URL
@@ -17,6 +19,9 @@ import Network.URI
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Maybe
+import System.Environment
+
+import SimpleArgvParser
 
 dbFile :: String
 dbFile = "tweets.db"
@@ -104,7 +109,13 @@ handler url req = case rqMethod req of
   _ -> return $ err_response NotImplemented
 
 main :: IO ()
-main = serverWith serverConfig handler'
+main = do
+  args <- getArgs
+
+  case pairArguments args of
+    Just argMap -> serverWith (serverConfig (Map.lookup "bind" argMap)) handler'
+    Nothing -> putStrLn usage
   where
+    usage = "./RandomTweetServer [--bind <address>]"
     handler' _ url req = handler url req
-    serverConfig = Config stdLogger "localhost" 8000
+    serverConfig maybeAddr = Config stdLogger (fromMaybe "localhost" maybeAddr) 8000

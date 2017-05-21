@@ -99,4 +99,4 @@ main = do
     Nothing -> putStrLn usage
   where
     handler' webRoot _ url req = runReaderT (handler url req) (ServerSettings webRoot)
-    usage = "./WebServer --root <web_root> [--port <port>]"
+    usage = "./WebServer --root <web_root> [--port <port>] [--bind <address>]"

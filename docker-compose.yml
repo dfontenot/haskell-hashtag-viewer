@@ -21,7 +21,7 @@ services:
     build: .
     image: hashtag-viewer
     container_name: hashtag-viewer-tweet-server
-    command: dist/build/RandomTweetServer/RandomTweetServer
+    command: ["dist/build/RandomTweetServer/RandomTweetServer", "--bind", "0.0.0.0"]
     volumes:
       - ./tweets.db:/opt/app/tweets.db
     logging:
