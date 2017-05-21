@@ -1,16 +1,12 @@
-var displayTimeMs = 2000; // how long to show each image
+var displayTimeMs = 5000; // how long to show each image
 var curData = null;
-
-var fadeIn = {
-  transition: 'opacity ' + (displayTimeMs / 1000) + 's linear'
-};
 
 var renderImage = function(data) {
   $('#image-message').addClass('hidden');
 
   var newImage = $('<img/>').addClass('image-response image-initial-hidden')
     .attr('src', 'data:' + data.mimeType + ";base64," + data.image);
-  newImage.css(fadeIn);
+  newImage.fadeIn(displayTimeMs);
 
   $('#container').append(newImage);
   newImage.addClass('image-visible');

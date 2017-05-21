@@ -119,6 +119,7 @@ writeTweetsToDB tweets =
 
 pollTweets :: IO ()
 pollTweets = do
+  putStrLn "Info: Checking for new tweets" -- TODO: bring in real logging library?
   latestTweets <- getLatestTweets
   case latestTweets of
     Left err -> putStrLn err
