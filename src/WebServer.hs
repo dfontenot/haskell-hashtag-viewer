@@ -20,14 +20,13 @@ import System.Environment
 
 import SimpleArgvParser
 
-data ServerSettings = ServerSettings
-                      { webRoot :: String
-                      }
+data ServerSettings = ServerSettings { webRoot :: String }
 
 data FileResponse =
   PermissionDenied String
   | FileNotFound String
   | FileOK String
+  | RedirectToIndex
 
 type ServerMonad = ReaderT ServerSettings IO
 
@@ -36,9 +35,16 @@ headers = [Header HdrPragma "no-cache"
           , Header HdrConnection "close"
           , Header HdrServer "HashtagViewerWebServer"]
 
+redirectHeaders :: [Header]
+redirectHeaders = [Header HdrPragma "no-cache"
+                  , Header HdrConnection "keep-alive"
+                  , Header HdrLocation "http://localhost:8001/index.html"
+                  , Header HdrServer "HashtagViewerWebServer"]
+
 respondForFile :: FileResponse -> IO (Response BL.ByteString)
-respondForFile (PermissionDenied path) = return $ Response (4,0,3) "Permission denied" headers (cs path)
-respondForFile (FileNotFound path) = return $ Response (4,0,4) "File not found" headers (cs path)
+respondForFile (PermissionDenied path) = return $ Response (4,0,3) "Permission denied" headers $ BL.append "Permission denied: " (cs path)
+respondForFile (FileNotFound path) = return $ Response (4,0,4) "File not found" headers $ BL.append "File not found: " (cs path)
+respondForFile RedirectToIndex = return $ Response (3,0,1) "Moved Permanently" redirectHeaders "Redirect"
 respondForFile (FileOK path) = do
   contents <- BL.readFile path
   return $ Response (2,0,0) "Ok" modifiedHeaders contents
@@ -46,8 +52,10 @@ respondForFile (FileOK path) = do
       mimeTypeHeader = Header HdrContentType $ cs $ defaultMimeLookup (cs path)
       modifiedHeaders = mimeTypeHeader:headers
 
-getResponseForFile :: String -> IO FileResponse
-getResponseForFile filePath = do
+-- TODO: bring into server monad once redirects are working correctly
+getResponseForFile :: String -> String -> IO FileResponse
+getResponseForFile _ path | path == "" = return RedirectToIndex
+getResponseForFile webRoot path = do
   exists <- doesFileExist filePath
   if exists
      then (getPermissions filePath) >>=
@@ -55,11 +63,13 @@ getResponseForFile filePath = do
                         then return $ FileOK filePath
                         else return $ PermissionDenied filePath)
      else return $ FileNotFound filePath
+   where
+     filePath = webRoot ++ path
 
 doRespond :: URL -> ServerMonad (Response BL.ByteString)
 doRespond url = do
   root <- asks webRoot
-  file <- liftIO $ getResponseForFile (root ++ (url_path url))
+  file <- liftIO $ getResponseForFile root (url_path url)
   liftIO $ respondForFile file
 
 handler :: URL -> Request BL.ByteString -> ServerMonad (Response BL.ByteString)

@@ -7,11 +7,9 @@ WORKDIR /opt/app
 ADD LICENSE LICENSE
 ADD haskell-hashtag-viewer.cabal .
 
-RUN cabal install --only-dependencies -j$(nproc)
+RUN cabal update && cabal install --only-dependencies -j$(nproc)
 
 ADD src src
+RUN cabal build -j$(nproc)
 ADD public public
-RUN cabal build WebServer -j$(nproc)
-
-CMD ["dist/build/WebServer/WebServer --root public/ --port 8001"]
 

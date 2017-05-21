@@ -103,7 +103,7 @@ insertImageForTweet conn id (Just mimeType) img =
 getMimeTypeFromUrl :: T.Text -> Maybe T.Text
 getMimeTypeFromUrl url = fmap E.decodeUtf8 $ Map.lookup ext defaultMimeMap
   where
-    ext = T.takeWhileEnd(/= '.') url
+    ext = T.takeWhileEnd (/= '.') url
 
 writeTweetsToDB :: [TT.Status] -> IO ()
 writeTweetsToDB tweets =
