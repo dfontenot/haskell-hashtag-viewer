@@ -5,7 +5,7 @@ services:
   web-server:
     build: .
     image: hashtag-viewer
-    command: ["dist/build/WebServer/WebServer", "--root", "public/", "--port", "8001"]
+    command: ["dist/build/WebServer/WebServer", "--bind", "0.0.0.0", "--root", "./public/", "--port", "8001"]
     container_name: hashtag-viewer-web-server
     logging:
       driver: json-file

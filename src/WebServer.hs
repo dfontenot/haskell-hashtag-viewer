@@ -78,8 +78,11 @@ handler url req = case rqMethod req of
   _ -> return $ err_response NotImplemented
 
 makeServerConfig :: Map.Map String String -> Config
-makeServerConfig argMap = Config stdLogger "localhost" port
+makeServerConfig argMap = Config stdLogger bindAddress port
   where
+    bindAddress = case Map.lookup "bind" argMap of
+      Just address -> address
+      Nothing -> "localhost"
     port = case Map.lookup "port" argMap of
       Just port -> fromIntegral (read port :: Integer)
       Nothing -> 8001
