@@ -8,6 +8,10 @@ var renderImage = function(data) {
     .attr('src', 'data:' + data.mimeType + ";base64," + data.image);
   newImage.fadeIn(displayTimeMs);
 
+  setTimeout(function () {
+    $('#tweet').text(data.screenName + ' (@' + data.userName + '): ' + data.tweet);
+  }, displayTimeMs / 2);
+
   $('#container').append(newImage);
   newImage.addClass('image-visible');
 

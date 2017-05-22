@@ -34,7 +34,7 @@ searchQuery :: String
 searchQuery = "https://api.twitter.com/1.1/search/tweets.json?q=%23cats"
 
 pollingPeriodUSec :: Int
-pollingPeriodUSec = 5 * 10^6
+pollingPeriodUSec = 10 * 10^6
 
 myOAuth :: B.ByteString -> B.ByteString -> OAuth
 myOAuth consumerKey consumerSecret =

@@ -1,9 +1,21 @@
 #container {
-  position: relative;
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
 
-  /* TODO: use full screen, testing with 500x500 for now */
-  width: 500px;
-  height: 500px;
+#tweet-author {
+  z-index: 1;
+  position: absolute;
+  bottom: 0px;
+  right: 50px;
+}
+
+p.outlined {
+  color: black;
+  /* source: http://stackoverflow.com/a/23969012 */
+  text-shadow: white 0px 0px 10px;
+  font-size: xx-large;
 }
 
 .image-response {
