@@ -9,6 +9,7 @@ import qualified System.FilePath as FP
 import qualified Network.URL as URL
 import Data.String.Conversions
 import Data.Maybe
+import Data.List
 import Data.Word
 import Network.HTTP.Server
 import Network.HTTP.Server.Logger
@@ -57,19 +58,23 @@ respondForFile (FileOK path) = do
       modifiedHeaders = mimeTypeHeader:headers
 
 getResponseForFile :: String -> ServerMonad FileResponse
-getResponseForFile urlPath = do
-  root <- asks webRoot
-  let filePath = FP.combine root urlPath in
-      if urlPath == "" then return RedirectToIndex else getFileResponse filePath
+getResponseForFile urlPath | urlPath == "" = return RedirectToIndex
+getResponseForFile urlPath = (asks webRoot) >>= (getFileResponse urlPath)
   where
-    getFileResponse filePath = liftIO $ do
-      exists <- doesFileExist filePath
-      if exists
-         then (getPermissions filePath) >>=
-              (\perms -> if readable perms
-                            then return $ FileOK filePath
-                            else return $ PermissionDenied filePath)
-         else return $ FileNotFound filePath
+    isPathAllowed canonicalPath webRoot = isPrefixOf (FP.splitPath webRoot) (FP.splitPath canonicalPath)
+    urlPathToSystemPath urlPath = (FP.joinPath . FP.splitPath) urlPath
+    getFileResponse urlPath webRoot = liftIO $ do
+      candidatePath <- canonicalizePath $ FP.combine webRoot $ urlPathToSystemPath urlPath
+      if isPathAllowed candidatePath webRoot
+         then do
+           exists <- doesFileExist candidatePath
+           if exists
+              then (getPermissions candidatePath) >>=
+                   (\perms -> if readable perms
+                                 then return $ FileOK candidatePath
+                                 else return $ PermissionDenied urlPath)
+              else return $ FileNotFound urlPath
+         else return $ PermissionDenied urlPath
 
 doRespond :: URL.URL -> ServerMonad (Response BL.ByteString)
 doRespond url = do
