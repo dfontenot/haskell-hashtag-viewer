@@ -16,12 +16,13 @@ import Network.Mime
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Maybe
 import System.Directory
 import System.Environment
 
 import SimpleArgvParser
 
-data ServerSettings = ServerSettings { webRoot :: String, port :: Int }
+data ServerSettings = ServerSettings { webRoot :: FP.FilePath, port :: Int }
 
 data FileResponse =
   PermissionDenied String
@@ -58,7 +59,7 @@ respondForFile (FileOK path) = do
 getResponseForFile :: String -> ServerMonad FileResponse
 getResponseForFile urlPath = do
   root <- asks webRoot
-  let filePath = root ++ urlPath in
+  let filePath = FP.combine root urlPath in
       if urlPath == "" then return RedirectToIndex else getFileResponse filePath
   where
     getFileResponse filePath = liftIO $ do
@@ -91,16 +92,19 @@ getBindAddressFromArgs argMap = fromMaybe "localhost" $ Map.lookup "bind" argMap
 makeServerConfig :: Map.Map String String -> Config
 makeServerConfig argMap = Config stdLogger (getBindAddressFromArgs argMap) (getPortFromArgs argMap)
 
+getWebRoot :: Map.Map String String -> MaybeT IO FP.FilePath
+getWebRoot argMap = MaybeT $ mapM canonicalizePath $ Map.lookup "root" argMap
+
 main :: IO ()
 main = do
   args <- getArgs
-
-  -- TODO: could be made cleaner
-  case pairArguments args of
-    Just argMap -> case Map.lookup "root" argMap of
-      Just web_root -> serverWith (makeServerConfig argMap) $ handler' web_root (getPortFromArgs argMap)
-      Nothing -> putStrLn usage
-    Nothing -> putStrLn usage
+  maybe (putStrLn usage) handleArgMap (pairArguments args)
   where
-    handler' webRoot port _ url req = runReaderT (handler url req) (ServerSettings webRoot port)
+    handleArgMap argMap = do
+      fullWebRootPath <- runMaybeT (getWebRoot argMap)
+      case fullWebRootPath of
+        Just path -> serverWith (makeServerConfig argMap) $ handler' path (getPortFromArgs argMap)
+        Nothing -> putStrLn usage
     usage = "./WebServer --root <web_root> [--port <port>] [--bind <address>]"
+    handler' webRoot port _ url req = runReaderT (handler url req) (ServerSettings webRoot port)
+
