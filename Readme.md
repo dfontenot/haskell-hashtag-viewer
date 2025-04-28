@@ -1,6 +1,8 @@
 A Twitter slideshow server in Haskell
 =================
 
+Create a social media wall / hashtag wall of photos.
+
 Create a continuous slide show of pictures from Twitter. Modify the query in `src/TwitterPoller.hs` to choose what to search for. Useful for making a slideshow out of a unique hashtag for an event.
 
 ![diagram of what this project's use-case is](docs/architecture-diagram.png)
